@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # reference: https://github.com/jwlin/ptt-web-crawler/tree/master/PttWebCrawler
 
+# self: the instance of the class in which the method is being executed
+
 from __future__ import absolute_import
 from __future__ import print_function
 
@@ -55,24 +57,44 @@ class PttWebCrawler(object):
         #          e.g., -b BOARD_NAME   Board name
 
         group = parser.add_mutually_exclusive_group(required=True)
+        #  mutually exclusive: user can only provide one of these options at a time
+        # user must choose at least one of the mutually exclusive options
+        
         group.add_argument('-i', metavar=('START_INDEX', 'END_INDEX'), type=int, nargs=2, help="Start and end index")
+        # the argument -i takes two integer values (START_INDEX and END_INDEX)
+
         group.add_argument('-a', metavar='ARTICLE_ID', help="Article ID")
         parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + __version__)
+        # action='version':  tells argparse to print the version information and exit
+        # %(prog)s: program name
 
         if not as_lib:
+            # as_lib: a flag that determines whether the script is being used as a standalone script 
+            #         or as a library/module
+
             if cmdline:
                 args = parser.parse_args(cmdline)
+                # if cmdline is provided, the script will use it to parse the arguments
             else:
                 args = parser.parse_args()
+                # use the system's command-line input (sys.argv)
+                
             board = args.b
+            # board name or some other entity (possibly passed with a -b argument
+
             if args.i:
+                # passed via the -i argument (2 integers: start and end)
+
                 start = args.i[0]
                 if args.i[1] == -1:
+                    # e.g., python script.py -b example_board -i 1 -1
+                    #       start from index 1 and go to the last page
                     end = self.getLastPage(board)
                 else:
                     end = args.i[1]
                 self.parse_articles(start, end, board)
-            else:  # args.a
+
+            else:  # args.a: represents an article ID (likely passed via the -a argument)
                 article_id = args.a
                 self.parse_article(article_id, board)
 
@@ -80,6 +102,10 @@ class PttWebCrawler(object):
             filename = board + '-' + str(start) + '-' + str(end) + '.json'
             filename = os.path.join(path, filename)
             self.store(filename, u'{"articles": [', 'w')
+            # u: Unicode string
+            #    (denoted by the u prefix in Python 2.x, but it's not necessary in Python 3.x, where all strings are Unicode by default)
+            # {"articles": [: JSON-like structure
+
             for i in range(end-start+1):
                 index = start + i
                 print('Processing index:', str(index))
@@ -91,17 +117,29 @@ class PttWebCrawler(object):
                     print('invalid url:', resp.url)
                     continue
                 soup = BeautifulSoup(resp.text, 'html.parser')
+                # resp.text: raw HTML content retrieved from an HTTP request
+
                 divs = soup.find_all("div", "r-ent")
+                # finds all <div> elements in the parsed HTML that have the class r-ent
+                # r-ent class: a website-defined class and not a standard HTML element
+
                 for div in divs:
                     try:
                         # ex. link would be <a href="/bbs/PublicServan/M.1127742013.A.240.html">Re: [問題] 職等</a>
                         href = div.find('a')['href']
                         link = self.PTT_URL + href
                         article_id = re.sub('\.html', '', href.split('/')[-1])
+                        # re (pyhton's regular expressions): extract and process the article ID from a URL
+                        # href.split('/'): returns a list of segments in the URL
+                        # href: "https://example.com/articles/article1.html"
+                        # href.split('/'): ['https:', '', 'example.com', 'articles', 'article1.html']
+                        # href.split('/')[-1]: "article1.html"
+
                         if div == divs[-1] and i == end-start:  # last div of last page
                             self.store(filename, self.parse(link, article_id, board), 'a')
                         else:
                             self.store(filename, self.parse(link, article_id, board) + ',\n', 'a')
+                            # a: file should be opened in "append" mode
                     except:
                         pass
                 time.sleep(0.1)
