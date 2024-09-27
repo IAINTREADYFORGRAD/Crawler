@@ -154,9 +154,19 @@ class PttWebCrawler(object):
         return filename
 
     @staticmethod
+    # a method does not depend on the instance of the class in which it is defined
+    # doesn't receive the self parameter and can't access the instance or class attributes unless they're passed explicitly
+    # could be called 
+    #   1. via class: MyClass.static_method()
+    #   2. via instance: instance = MyClass() instance.static_method()
+    # 
+    # a non-staticmethod could only be called via instance           
+    # 
     def parse(link, article_id, board, timeout=3):
         print('Processing article:', article_id)
         resp = requests.get(url=link, cookies={'over18': '1'}, verify=VERIFY, timeout=timeout)
+        # get raw html data (what written in .html)
+        
         if resp.status_code != 200:
             print('invalid url:', resp.url)
             return json.dumps({"error": "invalid url"}, sort_keys=True, ensure_ascii=False)
@@ -168,6 +178,7 @@ class PttWebCrawler(object):
         date = ''
         if metas:
             author = metas[0].select('span.article-meta-value')[0].string if metas[0].select('span.article-meta-value')[0] else author
+            # selects the first <span> element with the class article-meta-value
             title = metas[1].select('span.article-meta-value')[0].string if metas[1].select('span.article-meta-value')[0] else title
             date = metas[2].select('span.article-meta-value')[0].string if metas[2].select('span.article-meta-value')[0] else date
 
@@ -181,25 +192,54 @@ class PttWebCrawler(object):
         pushes = main_content.find_all('div', class_='push')
         for push in pushes:
             push.extract()
+        # remove an element from the parse tree. in this case, remove push from main_content
+        # re.compile(): compiles the pattern u'※ 發信站:' into a regular expression object. 
+        #               this allows for more flexible matching 
+        #               e.g., handle slight variations in the string like extra spaces
+        #               f the string contains additional characters (e.g., "※ 發信站: IP address info"), it would still find the match
 
         try:
             ip = main_content.find(string=re.compile(u'※ 發信站:'))
+            # Python 2: strings were by default byte strings, and the u prefix was used to indicate a Unicode string
+            # Python 3: strings are Unicode by default, so the u prefix is no longer necessary
+
             ip = re.search('[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*', ip).group()
+            # [0-9]*: matches any sequence of digits
+        
         except:
             ip = "None"
 
         # 移除 '※ 發信站:' (starts with u'\u203b'), '◆ From:' (starts with u'\u25c6'), 空行及多餘空白
         # 保留英數字, 中文及中文標點, 網址, 部分特殊符號
         filtered = [ v for v in main_content.stripped_strings if v[0] not in [u'※', u'◆'] and v[:2] not in [u'--'] ]
+        # stripped_strings: an iterator that yields the text of the elements in main_content, with leading and trailing whitespace removed
+        # v[:2]: the first 2 characters
+
         expr = re.compile(u(r'[^\u4e00-\u9fa5\u3002\uff1b\uff0c\uff1a\u201c\u201d\uff08\uff09\u3001\uff1f\u300a\u300b\s\w:/-_.?~%()]'))
+        # r: raw data
+        # ^: match any character
+        # \u4e00-\u9fa5: represents the range of Chinese characters
+        # \u3002: 。
+        # \uff1b: ；
+        # \uff1a: :
+        # \u201c\u201d: ""
+        # \uff08\uff09: ，
+        # \u3001:、
+        # \uff1f: ?
+        # \u300a\u300b: 《》
+        # \s: any whitespace character.
+        # \w: any word character (letters, digits, or underscores).
+        # :/\-_.?~%(): These are literal characters that you want to allow (e.g., :, /, -, _, ., ?, ~, %, ()).
+        
         for i in range(len(filtered)):
             filtered[i] = re.sub(expr, '', filtered[i])
+            # search expr for filtered[i] and each expr matching filtered[i] will be replaced w/ ''
 
         filtered = [_f for _f in filtered if _f]  # remove empty strings
         filtered = [x for x in filtered if article_id not in x]  # remove last line containing the url of the article
         content = ' '.join(filtered)
         content = re.sub(r'(\s)+', ' ', content)
-        # print 'content', content
+        # (\s)+: matches any whitespace character (spaces, tabs, newlines)
 
         # push messages
         p, b, n = 0, 0, 0
